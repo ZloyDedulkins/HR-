@@ -40,7 +40,7 @@ def build_full_result(file_obj) -> pd.DataFrame:
     result_df['Уволенные'] = result_df['Уволенные'].fillna(0).astype(int)
     result_df['штат'] = pd.to_numeric(result_df['штат'], errors='coerce').fillna(0)
 
-    result_df['Текучесть %'] = 0
+    result_df['Текучесть %'] = 0.0
     non_zero_staff = result_df['штат'] != 0
     result_df.loc[non_zero_staff, 'Текучесть %'] = (
         (result_df.loc[non_zero_staff, 'Уволенные'] / result_df.loc[non_zero_staff, 'штат']) * 100
