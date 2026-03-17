@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HR Dashboard · Текучесть персонала</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .app-header {
+            background: linear-gradient(135deg, #0d6efd, #6610f2);
+            color: #fff;
+            border-radius: 1rem;
+        }
+        .muted-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: .75rem;
+        }
+        .table thead {
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="bg-body-tertiary">
+<div class="container py-4 py-md-5">
+    <div class="app-header p-4 p-md-5 mb-4 shadow-sm">
+        <h1 class="h3 h-md-2 mb-2">📊 Анализ текучести персонала</h1>
+        <p class="mb-0 opacity-75">Загрузите Excel-файл и получите понятный отчёт по подразделениям.</p>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <form method="post" enctype="multipart/form-data" class="row g-3 align-items-end">
+                <div class="col-12 col-md-8">
+                    <label class="form-label fw-semibold">Excel-файл</label>
+                    <input type="file" class="form-control" name="file" accept=".xlsx" required>
+                    <div class="form-text">Ожидаются листы: <strong>Уволенные</strong>, <strong>Штатка</strong>, <strong>Исключения</strong>.</div>
+                </div>
+                <div class="col-12 col-md-4 d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">Рассчитать текучесть</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger shadow-sm" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+        <h2 class="h5 mb-0">Результат по подразделениям</h2>
+        <a class="btn btn-outline-success" href="{{ url_for('download_result') }}">Скачать итоговый Excel</a>
+    </div>
+
+    <div class="muted-card p-3 p-md-4 mb-4 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Подразделение</th>
+                        <th>Уволенные</th>
+                        <th>Штат</th>
+                        <th>Текучесть, %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in result %}
+                    <tr>
+                        <td>{{ row['подразделение'] }}</td>
+                        <td>{{ row['Уволенные'] }}</td>
+                        <td>{{ row['штат'] }}</td>
+                        <td><strong>{{ row['Текучесть %'] }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <h2 class="h5">График текучести</h2>
+            <canvas id="turnoverChart" height="130"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const labels = {{ chart_labels | tojson }};
+        const values = {{ chart_values | tojson }};
+
+        const ctx = document.getElementById('turnoverChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Текучесть, %',
+                    data: values,
+                    borderWidth: 1,
+                    backgroundColor: 'rgba(13, 110, 253, 0.65)',
+                    borderColor: 'rgba(13, 110, 253, 1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: true } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (val) => `${val}%`
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+    {% endif %}
+</div>
+</body>
+</html>
