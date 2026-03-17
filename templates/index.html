@@ -56,6 +56,26 @@
         <a class="btn btn-outline-success" href="{{ url_for('download_result') }}">Скачать итоговый Excel</a>
     </div>
 
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-12 col-lg-8">
+                    <label for="departments" class="form-label fw-semibold">Фильтр по подразделениям</label>
+                    <select id="departments" name="departments" class="form-select" multiple size="6">
+                        {% for dep in department_options %}
+                        <option value="{{ dep }}" {% if dep in selected_departments %}selected{% endif %}>{{ dep }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Можно выбрать несколько подразделений (Ctrl/Cmd + клик).</div>
+                </div>
+                <div class="col-12 col-lg-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Применить фильтр</button>
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Сбросить</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="muted-card p-3 p-md-4 mb-4 shadow-sm">
         <div class="table-responsive">
             <table class="table table-striped table-hover align-middle mb-0">
