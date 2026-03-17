@@ -1,3 +1,3 @@
-streamlit
+flask
 pandas
 openpyxl
