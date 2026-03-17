@@ -24,6 +24,7 @@ def index():
     result = None
     chart_labels = []
     chart_values = []
+    summary = None
     error = None
 
     if request.method == 'POST':
@@ -40,10 +41,16 @@ def index():
                 fired_clean = fired[~fired['ФИО'].isin(exclude['ФИО'])].copy()
                 fired_clean = fired_clean[fired_clean.apply(is_adult_at_dismissal, axis=1)]
                 result_df = fired_clean.groupby('подразделение').size().reset_index(name='Уволенные')
-                result_df = result_df.merge(staff, on='подразделение', how='left')
+                result_df = result_df.merge(staff, on='подразделение', how='inner')
                 result_df['Текучесть %'] = ((result_df['Уволенные'] / result_df['штат']) * 100).round(2)
                 result_df['подразделение'] = result_df['подразделение'].fillna('Без подразделения').astype(str)
                 result_df = result_df.sort_values('подразделение', ascending=True)
+
+                summary = {
+                    'total_fired': int(result_df['Уволенные'].sum()),
+                    'avg_turnover': round(result_df['Текучесть %'].mean(), 2) if not result_df.empty else 0,
+                    'total_staff': round(result_df['штат'].sum(), 2) if not result_df.empty else 0,
+                }
 
                 chart_labels = result_df['подразделение'].tolist()
                 chart_values = result_df['Текучесть %'].fillna(0).tolist()
@@ -55,6 +62,7 @@ def index():
     return render_template(
         'index.html',
         result=result,
+        summary=summary,
         chart_labels=chart_labels,
         chart_values=chart_values,
         error=error,

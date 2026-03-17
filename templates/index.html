@@ -77,6 +77,14 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot class="table-light fw-semibold">
+                    <tr>
+                        <td>Итого</td>
+                        <td>{{ summary['total_fired'] }}</td>
+                        <td>{{ summary['total_staff'] }}</td>
+                        <td>{{ summary['avg_turnover'] }}</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
