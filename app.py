@@ -1,7 +1,11 @@
-from flask import Flask, render_template, request
+from io import BytesIO
+
+from flask import Flask, render_template, request, send_file, session
 import pandas as pd
 
 app = Flask(__name__)
+app.secret_key = 'hr-dashboard-secret-key'
+
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -26,11 +30,13 @@ def index():
                 result_df = fired_clean.groupby('подразделение').size().reset_index(name='Уволенные')
                 result_df = result_df.merge(staff, on='подразделение', how='left')
                 result_df['Текучесть %'] = ((result_df['Уволенные'] / result_df['штат']) * 100).round(2)
-                result_df = result_df.sort_values('Текучесть %', ascending=False)
+                result_df['подразделение'] = result_df['подразделение'].fillna('Без подразделения').astype(str)
+                result_df = result_df.sort_values('подразделение', ascending=True)
 
-                chart_labels = result_df['подразделение'].fillna('Без подразделения').astype(str).tolist()
+                chart_labels = result_df['подразделение'].tolist()
                 chart_values = result_df['Текучесть %'].fillna(0).tolist()
                 result = result_df.to_dict(orient='records')
+                session['result_records'] = result
             except Exception as exc:
                 error = f'Не удалось обработать файл: {exc}'
 
@@ -40,6 +46,27 @@ def index():
         chart_labels=chart_labels,
         chart_values=chart_values,
         error=error,
+    )
+
+
+@app.route('/download-result')
+def download_result():
+    result_records = session.get('result_records')
+    if not result_records:
+        return 'Сначала рассчитайте текучесть, чтобы скачать файл.', 400
+
+    result_df = pd.DataFrame(result_records)
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        result_df.to_excel(writer, index=False, sheet_name='Итог')
+
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name='itog_tekuchesti.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
 
 
