@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Расчет текучести</title>
+</head>
+<body>
+    <h1>📊 Расчет текучести персонала</h1>
+    <form method="post" enctype="multipart/form-data">
+        <label>Загрузите Excel файл:</label>
+        <input type="file" name="file" accept=".xlsx" required>
+        <button type="submit">Рассчитать и скачать</button>
+    </form>
+    <p>Файл должен содержать три листа: Уволенные, Штатка, Исключения</p>
+</body>
+</html>
