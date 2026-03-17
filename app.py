@@ -7,6 +7,7 @@ app = Flask(__name__)
 app.secret_key = 'hr-dashboard-secret-key'
 
 
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     result = None
