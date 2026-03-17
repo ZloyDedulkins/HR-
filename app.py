@@ -6,6 +6,17 @@ import pandas as pd
 app = Flask(__name__)
 app.secret_key = 'hr-dashboard-secret-key'
 
+def is_adult_at_dismissal(row: pd.Series) -> bool:
+    dismissal_date = pd.to_datetime(row.get('Дата увольнения'), errors='coerce', dayfirst=True)
+    birth_date = pd.to_datetime(row.get('Дата рождения'), errors='coerce', dayfirst=True)
+
+    if pd.isna(dismissal_date) or pd.isna(birth_date):
+        return True
+
+    age_years = dismissal_date.year - birth_date.year - (
+        (dismissal_date.month, dismissal_date.day) < (birth_date.month, birth_date.day)
+    )
+    return age_years >= 18
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -26,7 +37,8 @@ def index():
                 staff = workbook.parse('Штатка')
                 exclude = workbook.parse('Исключения')
 
-                fired_clean = fired[~fired['ФИО'].isin(exclude['ФИО'])]
+                fired_clean = fired[~fired['ФИО'].isin(exclude['ФИО'])].copy()
+                fired_clean = fired_clean[fired_clean.apply(is_adult_at_dismissal, axis=1)]
                 result_df = fired_clean.groupby('подразделение').size().reset_index(name='Уволенные')
                 result_df = result_df.merge(staff, on='подразделение', how='left')
                 result_df['Текучесть %'] = ((result_df['Уволенные'] / result_df['штат']) * 100).round(2)
