@@ -65,9 +65,19 @@ def normalize_column_name(value) -> str:
 def find_column(df: pd.DataFrame, variants: list[str]) -> str | None:
     normalized_columns = {normalize_column_name(col): col for col in df.columns}
     for variant in variants:
-        found = normalized_columns.get(normalize_column_name(variant))
+        normalized_variant = normalize_column_name(variant)
+        found = normalized_columns.get(normalized_variant)
         if found:
             return found
+
+    for variant in variants:
+        normalized_variant = normalize_column_name(variant)
+        for normalized_column_name_value, column_name in normalized_columns.items():
+            if (
+                normalized_variant in normalized_column_name_value
+                or normalized_column_name_value in normalized_variant
+            ):
+                return column_name
     return None
 
 
@@ -178,7 +188,17 @@ def build_full_result(file_obj) -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     fired_counts = fired_clean.groupby(['Бизнес-юнит', 'подразделение']).size().reset_index(name='Уволенные')
 
-    fired_hire_date_col = find_column(fired_clean, ['дата приема', 'дата приёма'])
+    fired_hire_date_col = find_column(
+        fired_clean,
+        [
+            'дата приема',
+            'дата приёма',
+            'дата приема на работу',
+            'дата приёма на работу',
+            'прием на работу',
+            'приём на работу',
+        ],
+    )
     fired_dismissal_date_col = find_column(fired_clean, ['дата увольнения'])
     turnover_details_df = pd.DataFrame(
         {
