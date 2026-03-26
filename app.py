@@ -139,7 +139,7 @@ def build_staff_business_unit_maps(
     return dept_position_map, dept_map
 
 
-def build_full_result(file_obj) -> pd.DataFrame:
+def build_full_result(file_obj) -> tuple[pd.DataFrame, pd.DataFrame]:
     workbook = pd.ExcelFile(file_obj)
     fired = workbook.parse('Уволенные')
     staff = workbook.parse('Штатка')
@@ -178,6 +178,19 @@ def build_full_result(file_obj) -> pd.DataFrame:
     )
     fired_counts = fired_clean.groupby(['Бизнес-юнит', 'подразделение']).size().reset_index(name='Уволенные')
 
+    fired_hire_date_col = find_column(fired_clean, ['дата приема', 'дата приёма'])
+    fired_dismissal_date_col = find_column(fired_clean, ['дата увольнения'])
+    turnover_details_df = pd.DataFrame(
+        {
+            'Бизнес юнит': fired_clean['Бизнес-юнит'],
+            'подразделение': fired_clean['подразделение'],
+            'ФИО': fired_clean['ФИО'] if 'ФИО' in fired_clean.columns else '',
+            'должность': fired_clean[fired_position_col] if fired_position_col else '',
+            'дата приема': fired_clean[fired_hire_date_col] if fired_hire_date_col else '',
+            'дата увольнения': fired_clean[fired_dismissal_date_col] if fired_dismissal_date_col else '',
+        }
+    )
+
     staff_base = staff[['подразделение', 'штат']].copy()
     staff_base['подразделение'] = staff_base['подразделение'].fillna('Без подразделения').astype(str)
     if staff_business_unit_col:
@@ -199,7 +212,7 @@ def build_full_result(file_obj) -> pd.DataFrame:
     ).round(2)
 
     result_df = result_df.sort_values(['Бизнес-юнит', 'подразделение'], ascending=True)
-    return result_df
+    return result_df, turnover_details_df
 
 
 def apply_filters(
@@ -218,6 +231,22 @@ def apply_filters(
     return filtered.copy()
 
 
+def apply_detail_filters(
+    details_df: pd.DataFrame,
+    selected_departments: list[str],
+    selected_business_units: list[str],
+) -> pd.DataFrame:
+    filtered = details_df.copy()
+
+    if selected_departments:
+        filtered = filtered[filtered['подразделение'].isin(selected_departments)]
+
+    if selected_business_units:
+        filtered = filtered[filtered['Бизнес юнит'].isin(selected_business_units)]
+
+    return filtered.copy()
+
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     error = None
@@ -228,9 +257,11 @@ def index():
             error = 'Файл не выбран. Попробуйте ещё раз.'
         else:
             try:
-                full_result_df = build_full_result(file)
+                full_result_df, turnover_details_df = build_full_result(file)
                 full_records = full_result_df.to_dict(orient='records')
+                full_turnover_records = turnover_details_df.to_dict(orient='records')
                 session['full_result_id'] = cache_records(full_records)
+                session['full_turnover_id'] = cache_records(full_turnover_records)
                 return redirect(url_for('index'))
             except Exception as exc:
                 error = f'Не удалось обработать файл: {exc}'
@@ -250,6 +281,13 @@ def index():
         department_options = full_result_df['подразделение'].dropna().astype(str).sort_values().unique().tolist()
         business_unit_options = full_result_df['Бизнес-юнит'].dropna().astype(str).sort_values().unique().tolist()
         filtered_df = apply_filters(full_result_df, selected_departments, selected_business_units)
+        full_turnover_records = get_cached_records(session.get('full_turnover_id'))
+        if full_turnover_records:
+            turnover_df = pd.DataFrame(full_turnover_records)
+            filtered_turnover_df = apply_detail_filters(turnover_df, selected_departments, selected_business_units)
+            session['turnover_result_id'] = cache_records(filtered_turnover_df.to_dict(orient='records'))
+        else:
+            session['turnover_result_id'] = None
 
         summary = {
             'total_fired': int(filtered_df['Уволенные'].sum()),
@@ -322,6 +360,25 @@ def format_download_sheet(writer, sheet_name: str, export_df: pd.DataFrame) -> N
         worksheet.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
 
 
+def prepare_turnover_details_dataframe(details_df: pd.DataFrame) -> pd.DataFrame:
+    ordered_columns = [
+        'Бизнес юнит',
+        'подразделение',
+        'ФИО',
+        'должность',
+        'дата приема',
+        'дата увольнения',
+    ]
+    existing_columns = [column for column in ordered_columns if column in details_df.columns]
+    export_df = details_df[existing_columns].copy()
+
+    sort_columns = [column for column in ['Бизнес юнит', 'подразделение'] if column in export_df.columns]
+    if sort_columns:
+        export_df = export_df.sort_values(sort_columns, ascending=True, na_position='last')
+
+    return export_df
+
+
 
 @app.route('/download-result')
 def download_result():
@@ -331,11 +388,15 @@ def download_result():
 
     result_df = pd.DataFrame(result_records)
     export_df = prepare_download_dataframe(result_df)
+    turnover_records = get_cached_records(session.get('turnover_result_id')) or []
+    turnover_details_df = prepare_turnover_details_dataframe(pd.DataFrame(turnover_records))
     output = BytesIO()
 
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         export_df.to_excel(writer, index=False, sheet_name='Итог')
         format_download_sheet(writer, 'Итог', export_df)
+        turnover_details_df.to_excel(writer, index=False, sheet_name='Сотрудники')
+        format_download_sheet(writer, 'Сотрудники', turnover_details_df)
 
     output.seek(0)
     return send_file(
