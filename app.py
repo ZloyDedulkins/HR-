@@ -3,6 +3,7 @@ import re
 
 from flask import Flask, redirect, render_template, request, send_file, session, url_for
 import pandas as pd
+from openpyxl.utils import get_column_letter
 
 app = Flask(__name__)
 app.secret_key = 'hr-dashboard-secret-key'
@@ -259,6 +260,53 @@ def index():
     )
 
 
+def prepare_download_dataframe(result_df: pd.DataFrame) -> pd.DataFrame:
+    ordered_columns = [
+        'Бизнес-юнит',
+        'подразделение',
+        'штат',
+        'Уволенные',
+        'Текучесть %',
+    ]
+    existing_columns = [column for column in ordered_columns if column in result_df.columns]
+
+    export_df = result_df[existing_columns].copy()
+    export_df = export_df.rename(
+        columns={
+            'Бизнес-юнит': 'Бизнес-юнит',
+            'подразделение': 'Подразделение',
+            'штат': 'Штат',
+            'Уволенные': 'Уволено',
+            'Текучесть %': 'Текучесть %',
+        }
+    )
+
+    if 'Текучесть %' in export_df.columns:
+        export_df['Текучесть %'] = pd.to_numeric(export_df['Текучесть %'], errors='coerce').fillna(0) / 100
+
+    if 'Штат' in export_df.columns:
+        export_df['Штат'] = pd.to_numeric(export_df['Штат'], errors='coerce').fillna(0)
+
+    if 'Уволено' in export_df.columns:
+        export_df['Уволено'] = pd.to_numeric(export_df['Уволено'], errors='coerce').fillna(0).astype(int)
+
+    return export_df
+
+
+def format_download_sheet(writer, sheet_name: str, export_df: pd.DataFrame) -> None:
+    worksheet = writer.sheets[sheet_name]
+
+    if 'Текучесть %' in export_df.columns:
+        turnover_column_idx = export_df.columns.get_loc('Текучесть %') + 1
+        for row_idx in range(2, len(export_df) + 2):
+            worksheet.cell(row=row_idx, column=turnover_column_idx).number_format = '0.00%'
+
+    for col_idx, column_name in enumerate(export_df.columns, start=1):
+        max_len = max(len(str(column_name)), *(len(str(value)) for value in export_df[column_name].tolist()))
+        worksheet.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
+
+
+
 @app.route('/download-result')
 def download_result():
     result_records = session.get('result_records')
@@ -266,10 +314,12 @@ def download_result():
         return 'Сначала рассчитайте текучесть, чтобы скачать файл.', 400
 
     result_df = pd.DataFrame(result_records)
+    export_df = prepare_download_dataframe(result_df)
     output = BytesIO()
 
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        result_df.to_excel(writer, index=False, sheet_name='Итог')
+        export_df.to_excel(writer, index=False, sheet_name='Итог')
+        format_download_sheet(writer, 'Итог', export_df)
 
     output.seek(0)
     return send_file(
