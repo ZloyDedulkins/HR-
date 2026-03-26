@@ -370,7 +370,13 @@ def prepare_turnover_details_dataframe(details_df: pd.DataFrame) -> pd.DataFrame
         'дата увольнения',
     ]
     existing_columns = [column for column in ordered_columns if column in details_df.columns]
-    return details_df[existing_columns].copy()
+    export_df = details_df[existing_columns].copy()
+
+    sort_columns = [column for column in ['Бизнес юнит', 'подразделение'] if column in export_df.columns]
+    if sort_columns:
+        export_df = export_df.sort_values(sort_columns, ascending=True, na_position='last')
+
+    return export_df
 
 
 
