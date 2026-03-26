@@ -1,5 +1,6 @@
 from io import BytesIO
 import re
+import uuid
 
 from flask import Flask, redirect, render_template, request, send_file, session, url_for
 import pandas as pd
@@ -7,6 +8,8 @@ from openpyxl.utils import get_column_letter
 
 app = Flask(__name__)
 app.secret_key = 'hr-dashboard-secret-key'
+
+REPORT_CACHE: dict[str, list[dict]] = {}
 
 AZS_POSITIONS = {
     'администратор',
@@ -28,6 +31,19 @@ MB_POSITIONS = {
     'повар',
     'работник торгового зала',
 }
+
+
+def cache_records(records: list[dict]) -> str:
+    cache_key = str(uuid.uuid4())
+    REPORT_CACHE[cache_key] = records
+    return cache_key
+
+
+def get_cached_records(cache_key: str | None) -> list[dict] | None:
+    if not cache_key:
+        return None
+    return REPORT_CACHE.get(cache_key)
+
 
 
 def normalize_text(value) -> str:
@@ -214,12 +230,12 @@ def index():
             try:
                 full_result_df = build_full_result(file)
                 full_records = full_result_df.to_dict(orient='records')
-                session['full_result_records'] = full_records
+                session['full_result_id'] = cache_records(full_records)
                 return redirect(url_for('index'))
             except Exception as exc:
                 error = f'Не удалось обработать файл: {exc}'
 
-    full_records = session.get('full_result_records')
+    full_records = get_cached_records(session.get('full_result_id'))
     result = None
     summary = None
     chart_labels = []
@@ -244,7 +260,7 @@ def index():
         chart_labels = [f"{bu} / {dep}" for bu, dep in zip(filtered_df['Бизнес-юнит'], filtered_df['подразделение'])]
         chart_values = filtered_df['Текучесть %'].fillna(0).tolist()
         result = filtered_df.to_dict(orient='records')
-        session['result_records'] = result
+        session['result_id'] = cache_records(result)
 
     return render_template(
         'index.html',
@@ -309,7 +325,7 @@ def format_download_sheet(writer, sheet_name: str, export_df: pd.DataFrame) -> N
 
 @app.route('/download-result')
 def download_result():
-    result_records = session.get('result_records')
+    result_records = get_cached_records(session.get('result_id'))
     if not result_records:
         return 'Сначала рассчитайте текучесть, чтобы скачать файл.', 400
 
