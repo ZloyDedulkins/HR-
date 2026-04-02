@@ -96,6 +96,9 @@ def determine_business_unit(department, position) -> str:
     position_str = normalize_for_compare(position)
     first_symbol = department_str[:1].upper()
 
+    if first_symbol in {'С', 'Ш'}:
+        return 'Рестораны'
+
     if first_symbol == 'М':
         return 'БК'
 
